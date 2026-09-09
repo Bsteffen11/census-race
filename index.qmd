@@ -10,67 +10,93 @@ title: "Florida Census Demographics (2000–2020)"
 library(tidyverse)
 library(sf)
 library(leaflet)
+library(htmltools)
 
-# Load county boundaries and historical decennial census counts
-fl_geo <- read_rds("data/fl_geo.rds")
+# Load county boundaries and decennial census data
+fl_geo  <- read_rds("data/fl_geo.rds")
 fl_race <- read_rds("data/fl_race_2000_2020.rds")
 
-# Calculate Hispanic population percentage and 20-year shift
-change_hisp <- fl_race |>
-  filter(variable == "hispanic") |>
+# Reshape data to wide format to compute percentage point changes (2000 to 2020)
+race_wide <- fl_race |>
   mutate(pct = round(100 * (value / summary_value), 1)) |>
-  select(GEOID, year, pct) |>
-  pivot_wider(names_from = year, values_from = pct, names_prefix = "pct_") |>
+  select(GEOID, variable, year, pct) |>
+  pivot_wider(names_from = c(variable, year), values_from = pct) |>
   mutate(
-    diff_20yr = round(pct_2020 - pct_2000, 1),
-    diff_10yr = round(pct_2020 - pct_2010, 1)
+    diff_hisp  = round(hispanic_2020 - hispanic_2000, 1),
+    diff_black = round(black_2020 - black_2000, 1),
+    diff_white = round(white_2020 - white_2000, 1),
+    diff_asian = round(asian_2020 - asian_2000, 1)
   )
 
-# Join geometries and reproject to WGS84 for Leaflet
-fl_map <- left_join(fl_geo, change_hisp, by = "GEOID") |>
+# Combine with county geometries and reproject to WGS84
+fl_map <- left_join(fl_geo, race_wide, by = "GEOID") |>
   st_transform(4326)
+
+# Create hover labels summarizing all four groups for each county
+labels <- sprintf(
+  "<strong>%s</strong><br/>
+   Hispanic: %s%% &rarr; %s%% (%+0.1f pts)<br/>
+   White: %s%% &rarr; %s%% (%+0.1f pts)<br/>
+   Black: %s%% &rarr; %s%% (%+0.1f pts)<br/>
+   Asian: %s%% &rarr; %s%% (%+0.1f pts)",
+  fl_map$NAME,
+  fl_map$hispanic_2000, fl_map$hispanic_2020, fl_map$diff_hisp,
+  fl_map$white_2000, fl_map$white_2020, fl_map$diff_white,
+  fl_map$black_2000, fl_map$black_2020, fl_map$diff_black,
+  fl_map$asian_2000, fl_map$asian_2020, fl_map$diff_asian
+) |> lapply(HTML)
+
+# Define color scales for each demographic group
+pal_hisp  <- colorNumeric("YlOrRd", domain = fl_map$diff_hisp)
+pal_white <- colorNumeric("Blues", domain = fl_map$diff_white)
+pal_black <- colorNumeric("Purples", domain = fl_map$diff_black)
+pal_asian <- colorNumeric("Greens", domain = fl_map$diff_asian)
 ```
 
 ## Two Decades of Demographic Change Across Florida
 
-Between 2000 and 2020, Florida's Hispanic population grew rapidly, expanding not just in traditional metro areas like Miami-Dade, but across central Florida (such as Osceola and Orange counties) and southwest Florida.
+Between 2000 and 2020, Florida saw significant demographic shifts across all major racial and ethnic groups:
 
-Hover over any county to see its 20-year path (2000 → 2010 → 2020). Use the layer controls in the top right to switch between the 20-year percentage point increase and the 2020 baseline.
+- **Hispanic**: Substantial increases statewide, especially in central and southwest Florida.
+- **White (non-Hispanic)**: Decreased as a overall percentage of population in almost all 67 counties.
+- **Black**: Steady population shares in northern counties, with growth in select central and southern metros.
+- **Asian**: Steady percentage growth across major suburban and university counties.
+
+Use the radio buttons in the upper right to toggle which demographic shift colors the map. Hover over any county to view the full 20-year shift for all four groups.
 
 ```{r}
 #| label: interactive-map
 #| message: false
 #| echo: false
 
-pal_change <- colorNumeric("YlOrRd", domain = fl_map$diff_20yr)
-pal_2020   <- colorNumeric("Blues", domain = fl_map$pct_2020)
-
-leaflet(fl_map, width = "100%", height = "520px") |>
+leaflet(fl_map, width = "100%", height = "540px") |>
   addProviderTiles("CartoDB.Positron") |>
   addPolygons(
-    group = "20-Year Change (2000–2020)",
-    fillColor = ~pal_change(diff_20yr),
-    fillOpacity = 0.7,
-    weight = 1,
-    color = "white",
-    label = ~paste0(NAME, ": +", diff_20yr, " pts (", pct_2000, "% in 2000 → ", pct_2010, "% in 2010 → ", pct_2020, "% in 2020)")
+    group = "Hispanic Change",
+    fillColor = ~pal_hisp(diff_hisp),
+    fillOpacity = 0.7, weight = 1, color = "white",
+    label = labels
   ) |>
   addPolygons(
-    group = "2020 Hispanic %",
-    fillColor = ~pal_2020(pct_2020),
-    fillOpacity = 0.7,
-    weight = 1,
-    color = "white",
-    label = ~paste0(NAME, ": ", pct_2020, "% Hispanic in 2020")
+    group = "White Change",
+    fillColor = ~pal_white(diff_white),
+    fillOpacity = 0.7, weight = 1, color = "white",
+    label = labels
+  ) |>
+  addPolygons(
+    group = "Black Change",
+    fillColor = ~pal_black(diff_black),
+    fillOpacity = 0.7, weight = 1, color = "white",
+    label = labels
+  ) |>
+  addPolygons(
+    group = "Asian Change",
+    fillColor = ~pal_asian(diff_asian),
+    fillOpacity = 0.7, weight = 1, color = "white",
+    label = labels
   ) |>
   addLayersControl(
-    baseGroups = c("20-Year Change (2000–2020)", "2020 Hispanic %"),
+    baseGroups = c("Hispanic Change", "White Change", "Black Change", "Asian Change"),
     options = layersControlOptions(collapsed = FALSE)
-  ) |>
-  addLegend(
-    group = "20-Year Change (2000–2020)",
-    pal = pal_change,
-    values = ~diff_20yr,
-    title = "2000–2020 Change (pts)"
   )
 ```
