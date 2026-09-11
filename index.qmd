@@ -11,6 +11,7 @@ library(tidyverse)
 library(sf)
 library(leaflet)
 library(htmltools)
+library(DT)
 
 # Load county boundaries and decennial census data
 fl_geo  <- read_rds("data/fl_geo.rds")
@@ -69,31 +70,58 @@ Use the radio buttons in the upper right to toggle which demographic shift color
 #| message: false
 #| echo: false
 
-leaflet(fl_map, width = "100%", height = "540px") |>
-  addTiles() |>
+highlight_style <- highlightOptions(
+  weight = 2,
+  color = "#222222",
+  fillOpacity = 0.85,
+  bringToFront = TRUE
+)
+
+leaflet(fl_map, width = "100%", height = "560px") |>
+  addProviderTiles(providers$CartoDB.Positron) |>
   addPolygons(
     group = "Hispanic Change",
     fillColor = ~pal_hisp(diff_hisp),
     fillOpacity = 0.7, weight = 1, color = "white",
-    label = labels
+    label = labels,
+    highlightOptions = highlight_style
   ) |>
   addPolygons(
     group = "White Change",
     fillColor = ~pal_white(diff_white),
     fillOpacity = 0.7, weight = 1, color = "white",
-    label = labels
+    label = labels,
+    highlightOptions = highlight_style
   ) |>
   addPolygons(
     group = "Black Change",
     fillColor = ~pal_black(diff_black),
     fillOpacity = 0.7, weight = 1, color = "white",
-    label = labels
+    label = labels,
+    highlightOptions = highlight_style
   ) |>
   addPolygons(
     group = "Asian Change",
     fillColor = ~pal_asian(diff_asian),
     fillOpacity = 0.7, weight = 1, color = "white",
-    label = labels
+    label = labels,
+    highlightOptions = highlight_style
+  ) |>
+  addLegend(
+    pal = pal_hisp, values = ~diff_hisp, title = "Hispanic Change (pts)",
+    group = "Hispanic Change", position = "bottomright"
+  ) |>
+  addLegend(
+    pal = pal_white, values = ~diff_white, title = "White Change (pts)",
+    group = "White Change", position = "bottomright"
+  ) |>
+  addLegend(
+    pal = pal_black, values = ~diff_black, title = "Black Change (pts)",
+    group = "Black Change", position = "bottomright"
+  ) |>
+  addLegend(
+    pal = pal_asian, values = ~diff_asian, title = "Asian Change (pts)",
+    group = "Asian Change", position = "bottomright"
   ) |>
   addLayersControl(
     baseGroups = c("Hispanic Change", "White Change", "Black Change", "Asian Change"),
