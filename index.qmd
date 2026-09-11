@@ -128,3 +128,29 @@ leaflet(fl_map, width = "100%", height = "560px") |>
     options = layersControlOptions(collapsed = FALSE)
   )
 ```
+
+## County Demographic Shift Summary
+
+Explore shifts across all 67 counties between 2000 and 2020. Values represent percentage-point change:
+
+```{r}
+#| label: county-table
+#| echo: false
+
+fl_map |>
+  st_drop_geometry() |>
+  mutate(County = str_remove(NAME, " County, Florida")) |>
+  select(
+    County,
+    `Hispanic (pts)` = diff_hisp,
+    `White (pts)`    = diff_white,
+    `Black (pts)`    = diff_black,
+    `Asian (pts)`    = diff_asian
+  ) |>
+  arrange(desc(`Hispanic (pts)`)) |>
+  datatable(
+    options = list(pageLength = 10, autoWidth = TRUE),
+    rownames = FALSE
+  )
+```
+
